@@ -2713,6 +2713,11 @@ export default function OnCallApp() {
     setContinuingSupplyMonthlyArchiveMonth(month);
     setBillingMonth(month);
     if (typeof window !== 'undefined') localStorage.setItem('oncall_billing_month', month);
+    // 📅 「定期：○年○月分」の見出しは作成日から作られるため、開いた記録の月に作成日も合わせる
+    //    （すでにその月の日付が選ばれている場合は、その日付をそのまま使う）
+    const nextCreationDate = (supplyItemCreationDate || '').slice(0, 7) === month ? supplyItemCreationDate : `${month}-01`;
+    setSupplyItemCreationDate(nextCreationDate);
+    if (typeof window !== 'undefined') localStorage.setItem('oncall_supply_item_creation_date', nextCreationDate);
     setIsSupplyPatientPickerOpen(false);
     setSupplyNewItemDraft(null);
     setIsSupplyKindPickerOpen(false);
