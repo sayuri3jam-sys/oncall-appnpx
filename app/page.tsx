@@ -2286,38 +2286,54 @@ export default function OnCallApp() {
   // ログインID一覧・各種入力履歴（クリニック名・内服薬など）は端末ごとの操作抑止・補助入力に過ぎないため
   // 同期対象に含めない（従来通りlocalStorageのみ）。
   const [isServerStateLoaded, setIsServerStateLoaded] = useState(false);
+  // サーバーの内容を読み込んで画面に反映する。起動時と、ナビの「🔄 更新」ボタンの両方で使う。
+  // 通信に成功したらtrue（サーバーにまだ何も保存されていない場合も含む）、失敗したらfalseを返す
+  const refreshFromServer = async (): Promise<boolean> => {
+    try {
+      const res = await fetch('/api/state', { cache: 'no-store' });
+      if (!res.ok) return false;
+      const data: SharedAppState | null = await res.json();
+      if (data) {
+        if (Array.isArray(data.patients)) setPatients(data.patients);
+        if (typeof data.nextVisitDate === 'string') setNextVisitDate(data.nextVisitDate);
+        if (typeof data.handoverNote === 'string') setHandoverNote(data.handoverNote);
+        if (typeof data.savedHandoverNote === 'string') setSavedHandoverNote(data.savedHandoverNote);
+        if (typeof data.handoverNoteSavedBy === 'string') setHandoverNoteSavedBy(data.handoverNoteSavedBy);
+        if (typeof data.handoverNoteSavedAt === 'string') setHandoverNoteSavedAt(data.handoverNoteSavedAt);
+        if (typeof data.savedHandoverNoteDate === 'string') setSavedHandoverNoteDate(data.savedHandoverNoteDate);
+        if (typeof data.handoverNoteConfirmed === 'boolean') setHandoverNoteConfirmed(data.handoverNoteConfirmed);
+        if (data.handoverNoteArchive && typeof data.handoverNoteArchive === 'object') setHandoverNoteArchive(data.handoverNoteArchive);
+        // 📦 物品管理：サーバー側が空（まだどの端末も保存していない）の場合は、この端末の内容を消さずに残す。
+        //    残した内容は、直後の保存処理でサーバーへ送られ、他の端末からも見られるようになる
+        if (Array.isArray(data.commonSupplies) && data.commonSupplies.length > 0) {
+          setCommonSupplies(data.commonSupplies.map(migrateSupplyItem));
+        }
+        if (data.supplyMonthlyArchive && typeof data.supplyMonthlyArchive === 'object' && Object.keys(data.supplyMonthlyArchive).length > 0) {
+          setSupplyMonthlyArchive(data.supplyMonthlyArchive);
+        }
+        if (data.supplyTemporaryArchive && typeof data.supplyTemporaryArchive === 'object' && Object.keys(data.supplyTemporaryArchive).length > 0) {
+          setSupplyTemporaryArchive(data.supplyTemporaryArchive);
+        }
+      }
+      return true;
+    } catch (e) {
+      console.error('サーバーからのデータ取得に失敗しました:', e);
+      return false;
+    }
+  };
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
-    fetch('/api/state')
-      .then(res => (res.ok ? res.json() : null))
-      .then((data: SharedAppState | null) => {
-        if (data) {
-          if (Array.isArray(data.patients)) setPatients(data.patients);
-          if (typeof data.nextVisitDate === 'string') setNextVisitDate(data.nextVisitDate);
-          if (typeof data.handoverNote === 'string') setHandoverNote(data.handoverNote);
-          if (typeof data.savedHandoverNote === 'string') setSavedHandoverNote(data.savedHandoverNote);
-          if (typeof data.handoverNoteSavedBy === 'string') setHandoverNoteSavedBy(data.handoverNoteSavedBy);
-          if (typeof data.handoverNoteSavedAt === 'string') setHandoverNoteSavedAt(data.handoverNoteSavedAt);
-          if (typeof data.savedHandoverNoteDate === 'string') setSavedHandoverNoteDate(data.savedHandoverNoteDate);
-          if (typeof data.handoverNoteConfirmed === 'boolean') setHandoverNoteConfirmed(data.handoverNoteConfirmed);
-          if (data.handoverNoteArchive && typeof data.handoverNoteArchive === 'object') setHandoverNoteArchive(data.handoverNoteArchive);
-          // 📦 物品管理：サーバー側が空（まだどの端末も保存していない）の場合は、この端末の内容を消さずに残す。
-          //    残した内容は、直後の保存処理でサーバーへ送られ、他の端末からも見られるようになる
-          if (Array.isArray(data.commonSupplies) && data.commonSupplies.length > 0) {
-            const serverCommon = data.commonSupplies.map(migrateSupplyItem);
-            setCommonSupplies(serverCommon);
-          }
-          if (data.supplyMonthlyArchive && typeof data.supplyMonthlyArchive === 'object' && Object.keys(data.supplyMonthlyArchive).length > 0) {
-            setSupplyMonthlyArchive(data.supplyMonthlyArchive);
-          }
-          if (data.supplyTemporaryArchive && typeof data.supplyTemporaryArchive === 'object' && Object.keys(data.supplyTemporaryArchive).length > 0) {
-            setSupplyTemporaryArchive(data.supplyTemporaryArchive);
-          }
-        }
-      })
-      .catch(e => console.error('サーバーからのデータ取得に失敗しました:', e))
-      .finally(() => setIsServerStateLoaded(true));
+    refreshFromServer().finally(() => setIsServerStateLoaded(true));
   }, []);
+  // 🔄 ナビの「更新」ボタン：他の端末で保存された最新の内容を、ページを開き直さずに読み込む
+  const [serverRefreshStatus, setServerRefreshStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
+  const handleManualRefresh = async () => {
+    if (serverRefreshStatus === 'loading') return;
+    setServerRefreshStatus('loading');
+    const ok = await refreshFromServer();
+    setServerRefreshStatus(ok ? 'done' : 'error');
+    setTimeout(() => setServerRefreshStatus('idle'), 2500);
+  };
   React.useEffect(() => {
     if (!isServerStateLoaded) return;
     if (typeof window === 'undefined') return;
@@ -5061,6 +5077,15 @@ export default function OnCallApp() {
           ))}
         </div>
         <div className="flex items-center gap-2 ml-4 shrink-0">
+          <button
+            type="button"
+            onClick={handleManualRefresh}
+            disabled={serverRefreshStatus === 'loading'}
+            title="他の端末（PC・iPhone）で保存された最新の内容を読み込みます"
+            className={`px-3 py-2 text-xs font-bold border rounded-xl transition-all whitespace-nowrap ${serverRefreshStatus === 'error' ? 'text-rose-700 bg-rose-50 border-rose-200' : serverRefreshStatus === 'done' ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-purple-800 bg-slate-50 hover:bg-slate-100'}`}
+          >
+            {serverRefreshStatus === 'loading' ? '🔄 更新中…' : serverRefreshStatus === 'done' ? '✅ 更新しました' : serverRefreshStatus === 'error' ? '⚠️ 更新できません' : '🔄 更新'}
+          </button>
           <button onClick={handleOpenStaffAccountManager} title="ログインできるスタッフID・パスワードを管理します（管理者パスワードが必要です）" className="px-3 py-2 text-xs font-bold text-purple-800 hover:text-white bg-slate-50 hover:bg-slate-600 border rounded-xl transition-all whitespace-nowrap">🆔 スタッフ管理</button>
           <button onClick={handleLogout} className="px-3 py-2 text-xs font-bold text-purple-800 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 border rounded-xl transition-all">🚪 ログアウト</button>
           <span className="px-2 text-xs font-bold text-emerald-800 whitespace-nowrap">🗓️ {todayLabel}</span>
