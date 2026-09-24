@@ -1165,6 +1165,20 @@ export default function OnCallApp() {
   // null＝選択前（クリニック名や一覧はまだ何も出さない）、'create'＝これまでの作成画面、
   // 'history'＝定期履歴▼・臨時履歴▼のドロップダウンだけを表示する
   const [supplyEntryChoice, setSupplyEntryChoice] = useState<'create' | 'history' | null>(null);
+  // 📱 履歴▼のドロップダウンは、マウスを乗せると開く（group-hover）だけだとiPhoneなど指で操作する端末では
+  //    開けないため、タップでも開閉できるようにする。どのメニューが開いているか（無ければnull）。
+  //    メニュー外をタップした時は閉じる（iOSはclickがbodyまで届かないことがあるためpointerdownで判定）
+  const [openHistoryMenu, setOpenHistoryMenu] = useState<string | null>(null);
+  React.useEffect(() => {
+    if (!openHistoryMenu) return;
+    const closeOnOutsidePointer = (e: PointerEvent) => {
+      const target = e.target as Element | null;
+      if (target?.closest('[data-history-toggle], [data-history-menu]')) return;
+      setOpenHistoryMenu(null);
+    };
+    document.addEventListener('pointerdown', closeOnOutsidePointer);
+    return () => document.removeEventListener('pointerdown', closeOnOutsidePointer);
+  }, [openHistoryMenu]);
   // 🖨️ 物品管理の印刷：「在庫を含めて印刷」「在庫を除いて印刷」の2つのボタンを用意する。
   //    在庫を除く場合は、在庫の列だけ印刷時に隠すクラス（no-print）を付けた状態にしてから印刷を開く。
   //    setStateは非同期のため、押した瞬間にwindow.print()を呼ぶとまだ古い表示のまま印刷されてしまう。
@@ -5237,11 +5251,13 @@ export default function OnCallApp() {
                 <div className="no-print relative group inline-block text-xs">
                   <button
                     type="button"
+                    data-history-toggle
+                    onClick={() => setOpenHistoryMenu(prev => prev === 'handover' ? null : 'handover')}
                     className="font-bold text-slate-500 px-2 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 inline-flex items-center gap-1"
                   >
                     履歴 <span className="text-[9px]">▼</span>
                   </button>
-                  <div className="hidden group-hover:block absolute left-0 top-full z-30 bg-white border border-slate-200 rounded-xl shadow-lg py-1 min-w-[8rem]">
+                  <div data-history-menu className={`${openHistoryMenu === 'handover' ? 'block' : 'hidden group-hover:block'} absolute left-0 top-full z-30 bg-white border border-slate-200 rounded-xl shadow-lg py-1 min-w-[8rem]`}>
                     {Object.keys(handoverNoteArchive).length === 0 && (
                       <div className="px-3 py-2 text-slate-400 font-bold whitespace-nowrap">記録はまだありません</div>
                     )}
@@ -5249,7 +5265,7 @@ export default function OnCallApp() {
                       <div key={date} className="flex items-center justify-between hover:bg-slate-50">
                         <button
                           type="button"
-                          onClick={() => setViewingHandoverArchiveDate(date)}
+                          onClick={() => { setViewingHandoverArchiveDate(date); setOpenHistoryMenu(null); }}
                           className="flex-1 text-left px-3 py-1.5 text-slate-600 font-bold whitespace-nowrap"
                         >
                           {formatISOToJapaneseDate(date)}
@@ -6522,11 +6538,13 @@ export default function OnCallApp() {
                 <div className="relative group inline-block text-xs">
                   <button
                     type="button"
+                    data-history-toggle
+                    onClick={() => setOpenHistoryMenu(prev => prev === 'supply-monthly-history' ? null : 'supply-monthly-history')}
                     className="font-bold px-2 py-1 rounded-lg border inline-flex items-center gap-1 bg-white hover:bg-slate-50 text-slate-500 border-slate-200"
                   >
                     定期履歴 <span className="text-[9px]">▼</span>
                   </button>
-                  <div className="hidden group-hover:block absolute left-0 top-full z-30 bg-white border border-slate-200 rounded-xl shadow-lg py-1 min-w-[8rem]">
+                  <div data-history-menu className={`${openHistoryMenu === 'supply-monthly-history' ? 'block' : 'hidden group-hover:block'} absolute left-0 top-full z-30 bg-white border border-slate-200 rounded-xl shadow-lg py-1 min-w-[8rem]`}>
                     {Object.keys(supplyMonthlyArchive).length === 0 && (
                       <div className="px-3 py-2 text-slate-400 font-bold whitespace-nowrap">記録はまだありません</div>
                     )}
@@ -6584,11 +6602,13 @@ export default function OnCallApp() {
                 <div className="relative group inline-block text-xs">
                   <button
                     type="button"
+                    data-history-toggle
+                    onClick={() => setOpenHistoryMenu(prev => prev === 'supply-temporary-history' ? null : 'supply-temporary-history')}
                     className="font-bold px-2 py-1 rounded-lg border inline-flex items-center gap-1 bg-white hover:bg-slate-50 text-rose-600 border-rose-200"
                   >
                     臨時履歴 <span className="text-[9px]">▼</span>
                   </button>
-                  <div className="hidden group-hover:block absolute left-0 top-full z-30 bg-white border border-slate-200 rounded-xl shadow-lg py-1 min-w-[8rem]">
+                  <div data-history-menu className={`${openHistoryMenu === 'supply-temporary-history' ? 'block' : 'hidden group-hover:block'} absolute left-0 top-full z-30 bg-white border border-slate-200 rounded-xl shadow-lg py-1 min-w-[8rem]`}>
                     {Object.keys(supplyTemporaryArchive).length === 0 && (
                       <div className="px-3 py-2 text-slate-400 font-bold whitespace-nowrap">記録はまだありません</div>
                     )}
@@ -6786,11 +6806,13 @@ export default function OnCallApp() {
             <div className="relative group inline-block text-xs">
               <button
                 type="button"
+                data-history-toggle
+                onClick={() => setOpenHistoryMenu(prev => prev === 'supply-monthly' ? null : 'supply-monthly')}
                 className="font-bold px-2 py-1 rounded-lg border inline-flex items-center gap-1 bg-white hover:bg-slate-50 text-slate-500 border-slate-200"
               >
                 定期履歴 <span className="text-[9px]">▼</span>
               </button>
-              <div className="hidden group-hover:block absolute left-0 top-full z-30 bg-white border border-slate-200 rounded-xl shadow-lg py-1 min-w-[8rem]">
+              <div data-history-menu className={`${openHistoryMenu === 'supply-monthly' ? 'block' : 'hidden group-hover:block'} absolute left-0 top-full z-30 bg-white border border-slate-200 rounded-xl shadow-lg py-1 min-w-[8rem]`}>
                 {Object.keys(supplyMonthlyArchive).length === 0 && (
                   <div className="px-3 py-2 text-slate-400 font-bold whitespace-nowrap">記録はまだありません</div>
                 )}
@@ -6800,7 +6822,7 @@ export default function OnCallApp() {
                     <div key={m} className="flex items-center hover:bg-slate-50">
                       <button
                         type="button"
-                        onClick={() => handleContinueEditingMonthlyArchive(m)}
+                        onClick={() => { handleContinueEditingMonthlyArchive(m); setOpenHistoryMenu(null); }}
                         className="flex-1 min-w-0 text-left px-3 py-1.5 text-black font-bold whitespace-nowrap"
                       >
                         {y}年{Number(mo)}月{supplyMonthlyArchive[m].savedAt ? ` ${supplyMonthlyArchive[m].savedAt}` : ''}
@@ -6853,11 +6875,13 @@ export default function OnCallApp() {
             <div className="relative group inline-block text-xs">
               <button
                 type="button"
+                data-history-toggle
+                onClick={() => setOpenHistoryMenu(prev => prev === 'supply-temporary' ? null : 'supply-temporary')}
                 className="font-bold px-2 py-1 rounded-lg border inline-flex items-center gap-1 bg-white hover:bg-slate-50 text-rose-600 border-rose-200"
               >
                 臨時履歴 <span className="text-[9px]">▼</span>
               </button>
-              <div className="hidden group-hover:block absolute left-0 top-full z-30 bg-white border border-slate-200 rounded-xl shadow-lg py-1 min-w-[8rem]">
+              <div data-history-menu className={`${openHistoryMenu === 'supply-temporary' ? 'block' : 'hidden group-hover:block'} absolute left-0 top-full z-30 bg-white border border-slate-200 rounded-xl shadow-lg py-1 min-w-[8rem]`}>
                 {Object.keys(supplyTemporaryArchive).length === 0 && (
                   <div className="px-3 py-2 text-slate-400 font-bold whitespace-nowrap">記録はまだありません</div>
                 )}
@@ -6865,7 +6889,7 @@ export default function OnCallApp() {
                   <div key={d} className="flex items-center hover:bg-slate-50">
                     <button
                       type="button"
-                      onClick={() => handleContinueEditingTemporaryArchive(d)}
+                      onClick={() => { handleContinueEditingTemporaryArchive(d); setOpenHistoryMenu(null); }}
                       className="flex-1 min-w-0 text-left px-3 py-1.5 text-black font-bold whitespace-nowrap"
                     >
                       {formatISOToJapaneseDate(d.slice(0, 10))}{supplyTemporaryArchive[d].savedAt ? ` ${supplyTemporaryArchive[d].savedAt}` : ''}
