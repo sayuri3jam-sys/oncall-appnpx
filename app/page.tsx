@@ -242,6 +242,10 @@ interface SharedAppState {
   savedHandoverNoteDate: string;
   handoverNoteConfirmed: boolean;
   handoverNoteArchive: Record<string, { text: string; savedAt: string; savedBy: string }>;
+  // 📦 物品管理の共通物品・定期履歴・臨時履歴。以前の保存データには無いため省略可能として扱う
+  commonSupplies?: SupplyItem[];
+  supplyMonthlyArchive?: Record<string, SupplyMonthlySnapshot>;
+  supplyTemporaryArchive?: Record<string, SupplyMonthlySnapshot>;
 }
 
 // 🔒 部屋図に表示される「意思決定・緊急時対応」レ点の項目一覧。1件ずつ個別にパスワードを聞くと手間なので、
@@ -2297,6 +2301,18 @@ export default function OnCallApp() {
           if (typeof data.savedHandoverNoteDate === 'string') setSavedHandoverNoteDate(data.savedHandoverNoteDate);
           if (typeof data.handoverNoteConfirmed === 'boolean') setHandoverNoteConfirmed(data.handoverNoteConfirmed);
           if (data.handoverNoteArchive && typeof data.handoverNoteArchive === 'object') setHandoverNoteArchive(data.handoverNoteArchive);
+          // 📦 物品管理：サーバー側が空（まだどの端末も保存していない）の場合は、この端末の内容を消さずに残す。
+          //    残した内容は、直後の保存処理でサーバーへ送られ、他の端末からも見られるようになる
+          if (Array.isArray(data.commonSupplies) && data.commonSupplies.length > 0) {
+            const serverCommon = data.commonSupplies.map(migrateSupplyItem);
+            setCommonSupplies(serverCommon);
+          }
+          if (data.supplyMonthlyArchive && typeof data.supplyMonthlyArchive === 'object' && Object.keys(data.supplyMonthlyArchive).length > 0) {
+            setSupplyMonthlyArchive(data.supplyMonthlyArchive);
+          }
+          if (data.supplyTemporaryArchive && typeof data.supplyTemporaryArchive === 'object' && Object.keys(data.supplyTemporaryArchive).length > 0) {
+            setSupplyTemporaryArchive(data.supplyTemporaryArchive);
+          }
         }
       })
       .catch(e => console.error('サーバーからのデータ取得に失敗しました:', e))
@@ -2309,6 +2325,7 @@ export default function OnCallApp() {
       const payload: SharedAppState = {
         patients, nextVisitDate, handoverNote, savedHandoverNote, handoverNoteSavedBy,
         handoverNoteSavedAt, savedHandoverNoteDate, handoverNoteConfirmed, handoverNoteArchive,
+        commonSupplies, supplyMonthlyArchive, supplyTemporaryArchive,
       };
       fetch('/api/state', {
         method: 'PUT',
@@ -2318,7 +2335,7 @@ export default function OnCallApp() {
     }, 800);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [patients, nextVisitDate, handoverNote, savedHandoverNote, handoverNoteSavedBy, handoverNoteSavedAt, savedHandoverNoteDate, handoverNoteConfirmed, handoverNoteArchive, isServerStateLoaded]);
+  }, [patients, nextVisitDate, handoverNote, savedHandoverNote, handoverNoteSavedBy, handoverNoteSavedAt, savedHandoverNoteDate, handoverNoteConfirmed, handoverNoteArchive, commonSupplies, supplyMonthlyArchive, supplyTemporaryArchive, isServerStateLoaded]);
 
   // 🚨 保存ボタンを押すまでは実データに反映しない「下書き」状態
   const [summaryDraft, setSummaryDraft] = useState<{ patientId: string; name: string; age: number | null; gender: 'male' | 'female'; summary: EmergencySummary } | null>(null);
